@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Tracker</title>
+<style>
+:root{
+  --bg:#0b0e14; --card:#131826; --card2:#181f31; --line:#232b42;
+  --fg:#e8ecf5; --mut:#8b94ab; --up:#34d399; --dn:#f87171; --acc:#7c8cf8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif;min-height:100vh}
+header{position:sticky;top:0;z-index:5;background:rgba(11,14,20,.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+header h1{font-size:17px;font-weight:700;letter-spacing:.3px}
+header h1 span{color:var(--acc)}
+#pollstat{color:var(--mut);font-size:12px;margin-left:auto;display:flex;gap:10px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--up);display:inline-block}
+.dot.bad{background:var(--dn)}
+.btn{background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:8px;
+  padding:7px 14px;cursor:pointer;font-size:13px}
+.btn:hover{border-color:var(--acc)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#0b0e14;font-weight:600}
+main{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
+#addrow{display:flex;gap:10px;margin-bottom:18px;position:relative}
+#addrow input{flex:1;background:var(--card);border:1px solid var(--line);color:var(--fg);
+  border-radius:10px;padding:11px 14px;font:13px "Consolas",monospace}
+#addrow input:focus{outline:none;border-color:var(--acc)}
+#suggest{position:absolute;top:48px;left:0;right:120px;z-index:20;display:none;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 12px 32px rgba(0,0,0,.5);overflow:hidden;max-height:340px;overflow-y:auto}
+#suggest .sg{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer;
+  border-bottom:1px solid rgba(35,43,66,.5)}
+#suggest .sg:last-child{border-bottom:none}
+#suggest .sg:hover,#suggest .sg.sel{background:var(--card2)}
+#suggest img{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:none;background:var(--card2)}
+#suggest .sgsym{font-weight:600;font-size:13px}
+#suggest .sgname{color:var(--mut);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+#suggest .sgright{margin-left:auto;text-align:right;font-size:11px;color:var(--mut);flex:none}
+#suggest .sgchain{font-size:9px;font-weight:600;color:var(--acc);background:var(--card2);
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin-left:6px}
+#suggest .sgin{color:var(--up);font-size:10px}
+#suggest .sgempty{padding:12px;color:var(--mut);font-size:12px;text-align:center}
+#msg{font-size:12px;color:var(--mut);margin:-10px 0 14px;min-height:16px}
+#toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+#q{background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:8px;
+  padding:7px 12px;font-size:12.5px;width:230px}
+#q:focus{outline:none;border-color:var(--acc)}
+#sortSel{background:var(--card);border:1px solid var(--line);color:var(--fg);
+  border-radius:8px;padding:7px 8px;font-size:12.5px}
+#viewBtns{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#viewBtns button{background:var(--card);color:var(--mut);border:none;padding:7px 13px;cursor:pointer;font-size:13px}
+#viewBtns button.act{background:var(--acc);color:#0b0e14}
+#count{margin-left:auto;font-size:11.5px;color:var(--mut)}
+.tlist{width:100%;border-collapse:collapse;font-size:12.5px}
+.tlist thead th{position:sticky;top:0;background:var(--bg);color:var(--mut);font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:6px 8px;cursor:pointer;
+  border-bottom:1px solid var(--line);user-select:none;white-space:nowrap}
+.tlist thead th:hover{color:var(--fg)}
+.tlist thead th.act{color:var(--acc)}
+.tlist td{padding:5px 8px;border-bottom:1px solid rgba(35,43,66,.45);white-space:nowrap}
+.tlist .num{text-align:right;font-family:Consolas,monospace}
+.tlist thead th.num{text-align:right}
+.trow{cursor:pointer;background:var(--card)}
+.trow:hover{background:var(--card2)}
+.trow td:first-child{border-radius:8px 0 0 8px}
+.trow td:last-child{border-radius:0 8px 8px 0}
+.sparkl{width:90px;height:26px;display:block}
+.tsym{font-weight:700}
+.pnl-line{font-size:11.5px;margin:-2px 0 6px}
+#pfbar{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:12px 16px;margin-bottom:14px;font-size:13px}
+#pfbar .pfdet{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+#pfbar .pflnk{color:var(--acc);cursor:pointer;font-size:12px;user-select:none;white-space:nowrap}
+.pfhead{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+.pf-cap{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px}
+.pf-addr{font-family:Consolas,monospace;text-transform:none;letter-spacing:0;cursor:pointer}
+.pf-addr:hover{color:var(--acc)}
+.pf-bal{font-size:24px;font-weight:800;font-family:Consolas,monospace;line-height:1.15}
+.pf-pnl{font-size:16px;font-weight:700;font-family:Consolas,monospace;line-height:1.15;display:flex;align-items:center;gap:7px}
+.pf-pct{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:6px}
+.pf-pct.pos{background:rgba(16,185,129,.16)}.pf-pct.neg{background:rgba(239,68,68,.16)}
+.pf-right{margin-left:auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.pf-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px;font-size:12px;color:var(--mut)}
+.pf-stats .v{color:var(--fg);font-weight:600;margin-left:4px}
+.pf-list{margin-top:6px;border-top:1px solid var(--line);padding:4px 10px 0 0;max-height:300px;overflow-y:auto;
+  scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.pf-list::-webkit-scrollbar{width:6px}
+.pf-list::-webkit-scrollbar-track{background:transparent}
+.pf-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.pf-row{display:grid;grid-template-columns:1.6fr 1fr 48px;gap:8px;font-size:11.5px;padding:3px 0;position:relative;align-items:baseline}
+.pf-row::before{content:'';position:absolute;left:0;bottom:0;height:2px;width:var(--w,0%);background:var(--acc);opacity:.35;border-radius:1px}
+.pf-row .sym{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pf-row .v{text-align:right;font-family:Consolas,monospace}
+.pf-row .share{color:var(--mut);text-align:right;font-family:Consolas,monospace}
+.pnl-chip{display:inline-block;font-size:10px;color:var(--mut);background:var(--card2);
+  border:1px solid var(--line);border-radius:5px;padding:0 5px;margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.card.stale{opacity:.55}
+.chead{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+a.card{text-decoration:none;color:inherit;display:block}
+a.card:hover{border-color:var(--acc);background:var(--card2)}
+a.card:hover .csym{color:var(--acc)}
+.chead img,.cimg{width:38px;height:38px;border-radius:50%;background:var(--card2);object-fit:cover;flex:none}
+.csym{font-weight:700;font-size:15px}
+.cname{color:var(--mut);font-size:11.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cdel{position:absolute;top:10px;right:10px;color:var(--mut);cursor:pointer;font-size:16px;
+  opacity:.4;padding:2px 6px}
+.cdel:hover{opacity:1;color:var(--dn)}
+.price{font-size:19px;font-weight:700;font-family:Consolas,monospace;margin-bottom:8px}
+.price small{font-size:11px;color:var(--mut);font-weight:400}
+.chgs{display:flex;gap:8px;margin-bottom:8px}
+.chg{flex:1;background:var(--card2);border-radius:8px;padding:6px 4px;text-align:center}
+.chg b{display:block;font-size:13.5px}
+.chg span{font-size:10px;color:var(--mut);text-transform:uppercase}
+.pos{color:var(--up)}.neg{color:var(--dn)}
+.meta{display:flex;justify-content:space-between;color:var(--mut);font-size:11px;margin-bottom:6px}
+.spark{width:100%;height:52px;display:block}
+.alert-flash{animation:flash 1.6s ease}
+@keyframes flash{0%{box-shadow:0 0 0 2px var(--acc)}60%{box-shadow:0 0 24px 4px rgba(124,140,248,.5)}100%{box-shadow:none}}
+section.feed h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--mut);margin:26px 0 10px}
+#feedlist{max-height:413px;overflow-y:auto;padding-right:4px}  /* exactly 7 rows (48+7)×7, then scroll */
+#feedlist::-webkit-scrollbar{width:8px}
+#feedlist::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+#feedlist::-webkit-scrollbar-track{background:transparent}
+.feed-item{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:9px 12px;margin-bottom:7px;font-size:13px}
+a.feed-item{text-decoration:none;color:inherit}
+a.feed-item:hover{border-color:var(--acc);background:var(--card2)}
+.feed-item img{width:26px;height:26px;border-radius:50%}
+.feed-item .t{color:var(--mut);font-size:11px;margin-left:auto;white-space:nowrap}
+.tg-badge{font-size:10px;border-radius:5px;padding:1px 6px;background:var(--card2);color:var(--mut)}
+.tg-badge.ok{color:var(--up)} .tg-badge.err{color:var(--dn)}
+dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;
+  padding:22px;max-width:520px;width:92vw}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{font-size:16px;margin-bottom:14px}
+.frow{margin-bottom:11px}
+.frow label{display:block;font-size:11.5px;color:var(--mut);margin-bottom:4px}
+.frow input[type=text],.frow input[type=password],.frow input[type=number]{width:100%;
+  background:var(--card2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:8px 10px}
+.wtab{width:100%;border-collapse:collapse;margin:8px 0}
+.wtab th{font-size:11px;color:var(--mut);text-align:left;padding:3px 6px}
+.wtab td{padding:3px 6px}
+.wtab input{width:74px;background:var(--card2);border:1px solid var(--line);color:var(--fg);
+  border-radius:6px;padding:5px 7px}
+.hint{font-size:11px;color:var(--mut);margin-top:4px}
+.empty{color:var(--mut);text-align:center;padding:60px 20px;font-size:15px}
+.empty b{color:var(--acc)}
+#walletTabs{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.wtab-pill{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:6px 12px;cursor:pointer;font-size:12.5px;user-select:none}
+.wtab-pill:hover{border-color:var(--acc)}
+.wtab-pill.act{border-color:var(--acc);background:var(--card2);box-shadow:0 0 0 1px var(--acc) inset}
+.wtab-pill .wv{font-family:Consolas,monospace;color:var(--mut);font-size:11px}
+.wtab-pill .wp{font-family:Consolas,monospace;font-weight:700;font-size:11.5px}
+#chainTabs{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.chip{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:999px;
+  padding:3px 12px;font-size:11.5px;cursor:pointer;user-select:none;display:flex;gap:6px;align-items:center}
+.chip:hover{border-color:var(--acc);color:var(--fg)}
+.chip.act{background:var(--acc);border-color:var(--acc);color:#0b0e14;font-weight:600}
+.chip .cn{font-family:Consolas,monospace;font-size:10px;opacity:.8}
+.wtab-add{border-style:dashed;color:var(--mut)}
+.volrow{display:flex;align-items:center;gap:10px}
+.volrow input[type=range]{flex:1;accent-color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🪙 Token <span>Tracker</span></h1>
+  <div id="pollstat"><span id="polltext">…</span><span class="dot" id="dot"></span></div>
+  <button class="btn" onclick="openSettings()">⚙ <span data-i18n="settingsBtn">Settings</span></button>
+</header>
+<main>
+  <div id="addrow">
+    <input id="addr" data-i18n-ph="addPh" placeholder="" spellcheck="false" autocomplete="off">
+    <button class="btn primary" onclick="addToken()" data-i18n="addBtn">Add</button>
+    <div id="suggest"></div>
+  </div>
+  <div id="msg"></div>
+  <div id="walletTabs" style="display:none"></div>
+  <div id="chainTabs" style="display:none"></div>
+  <div id="pfbar" style="display:none"></div>
+  <div id="toolbar" style="display:none">
+    <input id="q" data-i18n-ph="filterPh" placeholder="" spellcheck="false" autocomplete="off">
+    <select id="sortSel" onchange="setSort(this.value)">
+      <option value="mcap" data-i18n="sort_mcap"></option>
+      <option value="move" data-i18n="sort_move"></option>
+      <option value="pnl"  data-i18n="sort_pnl"></option>
+      <option value="m5"   data-i18n="sort_m5"></option>
+      <option value="h1"   data-i18n="sort_h1"></option>
+      <option value="h24"  data-i18n="sort_h24"></option>
+      <option value="liq"  data-i18n="sort_liq"></option>
+      <option value="added" data-i18n="sort_added"></option>
+    </select>
+    <div id="viewBtns">
+      <button id="vGrid" onclick="setView('grid')" data-i18n-title="viewGridT">▦</button>
+      <button id="vList" onclick="setView('list')" data-i18n-title="viewListT">☰</button>
+    </div>
+    <span id="count"></span>
+  </div>
+  <div class="grid" id="grid"></div>
+  <table class="tlist" id="tlist" style="display:none"><thead></thead><tbody></tbody></table>
+  <div class="empty" id="empty" style="display:none" data-i18n-html="emptyHtml"></div>
+  <section class="feed">
+    <h2 data-i18n="feedH">Alert feed</h2>
+    <div id="feedlist"></div>
+  </section>
+</main>
+
+<dialog id="settings">
+  <h2 data-i18n="setH">Settings</h2>
+  <div class="frow"><label data-i18n="langL">Interface language</label>
+    <select id="langSel" onchange="setLang(this.value)" style="width:100%;background:var(--card2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:8px 10px">
+      <option value="en">English</option>
+      <option value="ru">Русский</option>
+    </select></div>
+  <div class="frow"><label>Telegram Bot Token (@BotFather)</label>
+    <input type="password" id="tg-token" placeholder="123456:ABC-DEF…"></div>
+  <div class="frow"><label>Telegram Chat ID</label>
+    <input type="text" id="tg-chat" placeholder="123456789 or -100…">
+    <div class="hint" data-i18n="tgChatHint"></div></div>
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <button class="btn" onclick="testTg()" data-i18n="btnTestTg"></button>
+    <button class="btn" onclick="testAlert()" data-i18n="btnTestAlert"></button>
+  </div>
+  <div class="frow"><label data-i18n="sndL"></label>
+    <div class="volrow">
+      <input type="checkbox" id="snd-on" style="width:18px;height:18px;accent-color:var(--acc)">
+      <span data-i18n="onL"></span>
+      <input type="range" id="vol" min="5" max="100" step="5">
+      <span id="volnum">70%</span>
+      <button class="btn" onclick="testSound()">♪</button>
+    </div></div>
+  <div class="frow"><label data-i18n="walletsL"></label>
+    <div id="wManage" style="margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <textarea id="wallets" rows="3" style="flex:1;background:var(--card2);border:1px solid var(--line);color:var(--fg);
+      border-radius:8px;padding:8px 10px;font:12px Consolas,monospace" spellcheck="false"
+      placeholder="0x…&#10;0x…"></textarea>
+      <button class="btn primary" onclick="addWallets()" data-i18n="btnAddWallets"></button>
+    </div>
+    <div class="hint" data-i18n="walletsHint2"></div>
+    <div class="hint" id="scanLog" style="white-space:pre-wrap"></div>
+    <div class="hint" id="pnlStatus"></div></div>
+  <div class="frow"><label data-i18n="windowsL"></label>
+    <table class="wtab"><thead><tr><th data-i18n="thWin"></th><th data-i18n="thSec"></th><th data-i18n="thThr"></th></tr></thead>
+    <tbody id="wtab"></tbody></table>
+    <div class="hint" data-i18n="windowsHint"></div></div>
+  <div class="frow"><label data-i18n="adL"></label>
+    <div class="volrow">
+      <input type="checkbox" id="ad-on" style="width:18px;height:18px;accent-color:var(--acc)">
+      <span style="font-size:12px" data-i18n="onL"></span>
+      <span style="font-size:12px;color:var(--mut);margin-left:8px" data-i18n="adK"></span>
+      <input type="number" id="ad-k" min="2" max="8" step="0.5" style="width:70px">
+      <span style="font-size:12px;color:var(--mut)" data-i18n="adLb"></span>
+      <input type="number" id="ad-lb" min="10" max="240" step="5" style="width:70px">
+    </div>
+    <div class="hint" data-i18n="adHint"></div></div>
+  <div class="frow"><label data-i18n="pollL"></label><input type="number" id="poll" min="5" max="120" style="width:90px"></div>
+  <div class="frow"><label data-i18n="pnlIvlL"></label><input type="number" id="pnlIvl" min="30" max="3600" step="30" style="width:90px"></div>
+  <div class="frow"><label data-i18n="pfIvlL"></label><input type="number" id="pfIvl" min="30" max="3600" step="30" style="width:90px">
+    <div class="hint" data-i18n="pfHint"></div></div>
+  <div class="frow"><label data-i18n="scanIvlL"></label><input type="number" id="scanIvl" min="30" max="3600" step="30" style="width:90px">
+    <div class="hint" data-i18n="scanIvlHint"></div></div>
+  <div class="frow"><label data-i18n="coolL"></label><input type="number" id="cool" min="30" max="3600" style="width:90px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn" onclick="document.getElementById('settings').close()" data-i18n="cancelBtn"></button>
+    <button class="btn primary" onclick="saveSettings()" data-i18n="saveBtn"></button>
+  </div>
+</dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+let CFG=null, lastFeedId=null, tokMap={};
+let PNL_META={ts:0,running:false};
+let viewMode=localStorage.getItem('tt.view')||'auto';    // auto (default) | grid | list
+let sortKey=localStorage.getItem('tt.sort')||'mcap';
+let lastTokens=[];
+const AUTO_LIST_N=30;
+
+// ---------------------------------------------------------------- i18n
+let LANG=localStorage.getItem('tt.lang')||'en';         // default is EN
+const I18N={
+en:{
+  settingsBtn:'Settings', addPh:'Token name or contract address from ANY network (EVM 0x…, Solana base58). Separate several with commas',
+  addBtn:'Add', filterPh:'🔎 filter: name, ticker, network…',
+  sort_mcap:'↑ market cap', sort_move:'⚡ momentum (5m/1h)', sort_pnl:'💰 by PnL %',
+  sort_m5:'5m', sort_h1:'1h', sort_h24:'24h', sort_liq:'liquidity', sort_added:'recent first',
+  viewGridT:'grid (click again = auto)', viewListT:'list (click again = auto)',
+  emptyHtml:'Nothing here yet. Paste a token contract above (any network) — the card shows up in a couple of seconds.<br>Alerts: <b>multi-window 1m/5m/15m/1h/24h</b>, they catch a pump even if it reverts.',
+  feedH:'Alert feed', feedEmpty:'empty — waiting for moves',
+  pollAt:'poll {t}', errSfx:' · error', serverDown:'server unreachable',
+  setH:'Settings', langL:'Interface language',
+  tgChatHint:'How to find it: message the bot, then open api.telegram.org/bot<token>/getUpdates — the chat.id is there',
+  btnTestTg:'Test Telegram', btnTestAlert:'Test alert (sound+TG)',
+  sndL:'Sound on this PC', onL:'on',
+  walletsL:'Wallets for PnL (one per line; EVM 0x…, Solana not supported yet)',
+  cAll:'all networks',
+  cTracked:'{n} tracked in this network', cHoldOnly:'positions here, none tracked — click shows wallet PnL for this network',
+  noPosChain:'no positions on {c}',
+  wPnlT:'wallet PnL: value now − (deposited − withdrawn), all networks',
+  scanIvlL:'Auto-detect new purchases every, sec',
+  scanIvlHint:'Every interval the tracker checks wallet balances on all enabled networks: fresh purchases show up in the wallet\u2019s watchlist automatically (junk filter applies). Manual add still works.',
+  walletsHint:'PnL is computed from these wallets\u2019 on-chain transfers (Blockscout) — by swap legs, FIFO cost basis. Recalc frequency is set below (default 60 s).',
+  windowsL:'Trigger windows & thresholds (%)', thWin:'window', thSec:'seconds', thThr:'threshold %',
+  windowsHint:'Thresholds above are base values; with “auto” they scale up to each token\u2019s volatility. Cooldown prevents spam.',
+  adL:'Auto thresholds (adapt to token volatility)', adK:'σ multiplier', adLb:'estimation window, min',
+  adHint:'Threshold = max(floor, k×σ of the token); floors: 1m≥4%, 5m≥6%, 15m≥9%, 1h≥15%. Lower k = more sensitive, higher = less spam. σ accumulates ~15–30 min after a token is added — until then base thresholds apply.',
+  pollL:'Poll period, sec', pnlIvlL:'Recalc per-token PnL every, sec',
+  pfIvlL:'Recalc wallet (portfolio) every, sec',
+  pfHint:'PnL is read from the Robinhood block explorer; too-frequent requests may be throttled (429/5xx) — the panel then keeps the last snapshot («cache» badge). 60–120 s is comfortable.',
+  coolL:'Cooldown between same-direction alerts, sec',
+  wAll:'All wallets', wAdd:'＋ wallet', btnAddWallets:'Add', scanning:'scanning…',
+  wScan:'rescan', wDel:'remove', wTokensN:'tokens: {n}',
+  addWalletsPh:'New wallets — one per line or comma-separated',
+  walletsHint2:'Add wallets as a list — each one appears below and gets scanned instantly; junk positions (stablecoins, dust under $1, pools with liquidity under $1000) are filtered out automatically. Click a pill above to switch the token list.',
+  scanFor:'Scanning {a}…', scanAdded:'tokens added: {n}', scanFiltered:'filtered out (junk/no pool): {n}',
+  scanErr:'scan error: {e}', scanEmpty:'no new positions found',
+  delWalletConfirm:'Remove wallet {a}?\nIts tokens disappear from the tracker (unless another wallet watches them).',
+  walletCount:'{n} wallets',
+  cancelBtn:'Cancel', saveBtn:'Save',
+  pnlRunning:'PnL: recalculating…', pnlUpd:'PnL updated {t}', pnlNone:'PnL: not computed yet',
+  addedN:'added {n}', skippedN:', skipped {n}', skippedEmpty:'nothing to add',
+  skBad:'{a}… — doesn\u2019t look like a contract address', skDup:'{a}… — already in the list',
+  delConfirm:'Remove this token from the tracker?',
+  testTgOk:'✅ Message delivered to Telegram', testAlertOk:'✅ Alert sent (sound + Telegram)',
+  testAlertWarn:'⚠️ sound played, Telegram: ',
+  listingWait:'awaiting DexScreener listing…', openChart:'Open chart on DexScreener', rmT:'remove',
+  liqShort:'Liq.', mcapShort:'MCap', baseWord:'base', autoTag:'⚡auto',
+  chg5m:'5m', chg1h:'1h', chg24h:'24h',
+  posChip:'pos {v}', unreliableT:'Wallet looks like a contract/market-maker — transfer-based PnL is meaningless here. Position: {v}',
+  pnlTitle:'Buys: {b}, sells: {s}\nInvested: {inv}  Avg entry: {avg} ({q} tok.)\nPosition: {pos}\nUnrealized: {u} {note}\nRealized: {r}',
+  partialNote:'(some trades lack an exact price — lower estimate)', priceErrChip:'pnl ~',
+  inWord:'in', reasonSpike:'spike (reverting)', reasonTrend:'trend',
+  showOf:'showing {a} of {n}', gridWord:'grid', listWord:'list', autoWord:' (auto)',
+  pfWallet:'💼 Wallet', retryWord:'retry', copiedT:'{a} (click to copy)',
+  balTitle:'value now: tokens + cash + ETH',
+  pnlNoGasCap:'PnL ex-gas', pnlNoGasT:'Wallet PnL minus network fees (gas) — the market result',
+  pnlScopeT:' Counted on Robinhood only: bridge moves between networks break the deposited/withdrawn accounting on other chains.',
+  pnlBridgeT:'PnL is not calculated for this network: funds arrive via bridges (from contracts), which breaks the deposited/withdrawn accounting — the number would be fictitious. Balance and gas for this network are accurate.',
+  gasCap:'⛽ gas', gasT:'network fees for {n} txs ({e} ETH). Full loss = ex-gas PnL + gas ({v})',
+  detailsW:'details ▼', collapseW:'collapse ▲',
+  updFresh:'updated {n}s ago', updFreshM:'updated {n} min ago',
+  updStale:'⚠ cache: {n}s ago (network down)', updStaleM:'⚠ cache: {n} min ago (network down)',
+  stTokens:'tokens', stCash:'cash (stable)', stEth:'ETH (gas)', stDep:'funded in', stWdr:'withdrawn',
+  stGas:'gas spent{tx}', stGasTx:' ({n} tx)', gasEthT:'⛽ {e} ETH',
+  stBridges:'bridge transfers', stBridgesT:'Out→in pairs matched across chains (≤7 days, ±6%): that capital moved between networks, it was not withdrawn. Bridge fees land in per-chain PnL.',
+  byWord:'@ ', unpricedRow:'no price (excluded from total): {l}',
+  footerVal:'Balance = sum of positions, stable cash and ETH across all networks of this wallet{chains}. Token prices are live from the most liquid pools; small illiquid holdings may lack a price.',
+  chainsIn:'networks',
+  footerGas:' Gas (⛽ {g}) — lifetime network fees.',
+  showAllW:'show all {n}', collapseListW:'collapse list',
+  sgNone:'nothing found — paste a contract address', sgInList:'✓ in list', sgLiq:'liq',
+  errChain:'chain «{c}» not supported yet', errNoPrice:'no current price',
+  errNoTrades:'no transfers of this token', errNoNet:'no network data (Blockscout unavailable)',
+  errSolana:'PnL for Solana — coming soon (needs swap-price calculation)',
+  noPosInWallet:'no position of this token in the selected wallet',
+  thTicker:'ticker', thPrice:'price', thLiq:'liq.', thChart:'chart',
+},
+ru:{
+  settingsBtn:'Настройки', addPh:'Название токена или адрес из ЛЮБОЙ сети (EVM 0x…, Solana base58). Можно несколько через запятую',
+  addBtn:'Добавить', filterPh:'🔎 фильтр: название, тикер, сеть…',
+  sort_mcap:'↑ капитализация', sort_move:'⚡ по движению (5м/1ч)', sort_pnl:'💰 по PnL %',
+  sort_m5:'5м', sort_h1:'1ч', sort_h24:'24ч', sort_liq:'ликвидность', sort_added:'недавние сверху',
+  viewGridT:'карточки (повторный клик — авто)', viewListT:'список (повторный клик — авто)',
+  emptyHtml:'Пока пусто. Добавь контракт токена сверху (любая сеть) — карточка появится через пару секунд.<br>Алерты: <b>мульти-окна 1м/5м/15м/1ч/24ч</b>, ловят памп с последующим возвратом.',
+  feedH:'Лента алертов', feedEmpty:'пусто — ждём движения',
+  pollAt:'опрос {t}', errSfx:' · ошибка', serverDown:'сервер недоступен',
+  setH:'Настройки', langL:'Язык интерфейса',
+  tgChatHint:'Как узнать: напиши боту, затем открой api.telegram.org/bot<token>/getUpdates — там chat.id',
+  btnTestTg:'Проверить Telegram', btnTestAlert:'Тест алерт (звук+TG)',
+  sndL:'Звук на этом ПК', onL:'вкл',
+  walletsL:'Кошельки для PnL (по одному в строке; EVM 0x…, Solana не поддерживается в v1)',
+  cAll:'все сети',
+  cTracked:'{n} отслеживается в этой сети', cHoldOnly:'позиции есть, отслеживаемых нет — покажет PnL кошелька по этой сети',
+  noPosChain:'нет позиций в сети {c}',
+  wPnlT:'PnL кошелька: стоимость сейчас − (занесено − выведено), все сети',
+  scanIvlL:'Автотрекинг покупок каждые, сек',
+  scanIvlHint:'Каждый интервал трекер сверяет балансы кошельков по всем включённым сетям: свежие покупки автоматически появляются в списке кошелька (фильтр мусора применяется). Ручное добавление тоже работает.',
+  walletsHint:'PnL считается по ончейн-трансферам этих кошельков (Blockscout) по ногам свапов, FIFO-костбазис. Частота пересчёта настраивается ниже (по умолчанию 60 сек).',
+  windowsL:'Окна и пороги срабатывания (%)', thWin:'окно', thSec:'секунд', thThr:'порог %',
+  windowsHint:'Пороги выше — базовые; при «авто» они повышаются под волатильность каждого токена. Кулдаун не даст спамить.',
+  adL:'Автопороги (подстройка под волатильность токена)', adK:'множитель σ', adLb:'окно оценки, мин',
+  adHint:'Порог = max(пол, k×σ токена); полы: 1м≥4%, 5м≥6%, 15м≥9%, 1ч≥15%. Меньше k — чувствительнее; больше — меньше спама. σ накопится за ~15–30 минут после добавления токена, до этого — базовые пороги.',
+  pollL:'Период опроса, сек', pnlIvlL:'PnL по токенам пересчитывать каждые, сек',
+  pfIvlL:'Кошелёк (портфель) пересчитывать каждые, сек',
+  pfHint:'PnL читается с блок-эксплорера Robinhood; слишком частые запросы он может резать (429/5xx) — данные тогда останутся на последнем снимке (бейдж «кэш»). Комфортно 60–120 сек.',
+  coolL:'Кулдаун между алертами одного направления, сек',
+  wAll:'Все кошельки', wAdd:'＋ кошелёк', btnAddWallets:'Добавить', scanning:'сканирую…',
+  wScan:'просканировать', wDel:'удалить', wTokensN:'токенов: {n}',
+  addWalletsPh:'Новые кошельки — по одному в строке или через запятую',
+  walletsHint2:'Добавь кошелёк списком — он появится ниже и сразу просканируется: нетокенизированные позиции (стейблы, пыль <$1, пулы с ликвидностью <$1000) отсекаются автоматически. Клик по пилюле сверху — переключение списка токенов.',
+  scanFor:'Скан {a}…', scanAdded:'добавлено токенов: {n}', scanFiltered:'отфильтровано (мусор/нет пула): {n}',
+  scanErr:'ошибка скана: {e}', scanEmpty:'новых позиций не найдено',
+  delWalletConfirm:'Удалить кошелёк {a}?\nЕго токены исчезнут из трекера (если не наблюдаются другими кошельками).',
+  walletCount:'{n} кошельков',
+  cancelBtn:'Отмена', saveBtn:'Сохранить',
+  pnlRunning:'PnL: идёт пересчёт…', pnlUpd:'PnL обновлён {t}', pnlNone:'PnL: ещё не считался',
+  addedN:'добавлено {n}', skippedN:', пропущено {n}', skippedEmpty:'нечего добавлять',
+  skBad:'{a}… — не похоже на адрес контракта', skDup:'{a}… — уже в списке',
+  delConfirm:'Убрать токен из трекера?',
+  testTgOk:'✅ Сообщение доставлено в Telegram', testAlertOk:'✅ Алерт отправлен (звук + Telegram)',
+  testAlertWarn:'⚠️ звук сыграл, Telegram: ',
+  listingWait:'ожидание листинга на DexScreener…', openChart:'Открыть график на DexScreener', rmT:'убрать',
+  liqShort:'Ликв.', mcapShort:'MCap', baseWord:'база', autoTag:'⚡авто',
+  chg5m:'5м', chg1h:'1ч', chg24h:'24ч',
+  posChip:'поз {v}', unreliableT:'Кошелёк похож на контракт/маркетмейкера — PnL по трансферам тут бессмыслен. Позиция: {v}',
+  pnlTitle:'Покупки: {b}, продажи: {s}\nВложено: {inv}  Средняя входа: {avg} ({q} ток.)\nПозиция: {pos}\nНереализованный: {u} {note}\nРеализованный: {r}',
+  partialNote:'(часть сделок без точной цены — нижняя оценка)', priceErrChip:'pnl ~',
+  inWord:'за', reasonSpike:'спайк (возврат)', reasonTrend:'тренд',
+  showOf:'показ {a} из {n}', gridWord:'карточки', listWord:'список', autoWord:' (авто)',
+  pfWallet:'💼 Кошелёк', retryWord:'повторить', copiedT:'{a} (клик — скопировать)',
+  balTitle:'стоимость сейчас: токены + кэш + ETH',
+  pnlNoGasCap:'PnL без газа', pnlNoGasT:'PnL кошелька минус комиссии сети (газ) — рыночный результат',
+  pnlScopeT:' Считается только по Robinhood: переводы через мосты между сетями ломают учёт «занёс/вывел» на остальных цепях.',
+  pnlBridgeT:'PnL по этой сети не считается: деньги приходят через мосты (от контрактов), из-за этого учёт «занёс/вывел» врёт — цифра была бы фиктивной. Баланс и газ по сети при этом точные.',
+  gasCap:'⛽ газ', gasT:'комиссии сети за {n} транзакций ({e} ETH). Полная потеря = PnL без газа + газ ({v})',
+  detailsW:'детали ▼', collapseW:'свернуть ▲',
+  updFresh:'обновлено {n}с назад', updFreshM:'обновлено {n}мин назад',
+  updStale:'⚠ кэш: {n}с назад (сеть недоступна)', updStaleM:'⚠ кэш: {n}мин назад (сеть недоступна)',
+  stTokens:'токены', stCash:'кэш (стейбл)', stEth:'ETH (газ)', stDep:'пополнения', stWdr:'выведено',
+  stGas:'газ истрачено{tx}', stGasTx:' ({n} tx)', gasEthT:'⛽ {e} ETH',
+  stBridges:'переносы между сетями', stBridgesT:'Пары «исход↔приход», сопоставленные между цепями (≤7 дней, ±6%): этот капитал переехал между сетями, а не был выведен. Комиссии моста попадают в PnL сетей.',
+  byWord:'по ', unpricedRow:'без цены (не входит в итог): {l}',
+  footerVal:'Баланс = сумма позиций, стейбл-кэша и ETH по всем сетям этого кошелька{chains}. Цены токенов — живые с ликвиднейших пулов; мелкие неликвидные позиции могут быть без цены.',
+  chainsIn:'сети',
+  footerGas:' Газ (⛽ {g}) — комиссии сети за всё время.',
+  showAllW:'показать все {n}', collapseListW:'свернуть список',
+  sgNone:'ничего не найдено — вставь адрес контракта', sgInList:'✓ в списке', sgLiq:'ликв',
+  errChain:'сеть «{c}» пока не поддерживается', errNoPrice:'нет текущей цены',
+  errNoTrades:'нет трансферов по этому токену', errNoNet:'нет данных сети (Blockscout недоступен)',
+  errSolana:'PnL для Solana — скоро (нужен расчёт цен по свопам)',
+  noPosInWallet:'у выбранного кошелька нет позиции по этому токену',
+  thTicker:'тикер', thPrice:'цена', thLiq:'ликв.', thChart:'график',
+}};
+const t=(k,p)=>{ let s=(I18N[LANG]&&I18N[LANG][k])||I18N.en[k]||k;
+  if(p) for(const x in p) s=s.split('{'+x+'}').join(p[x]);
+  return s; };
+const loc=()=>LANG==='ru'?'ru-RU':'en-US';
+// known server error strings -> translated (unmatched ones pass through as-is)
+const SRV_ERR=[
+  [/^сеть «(.+)» пока не поддерживается$/, m=>t('errChain',{c:m[1]})],
+  [/^PnL для Solana/, ()=>t('errSolana')],
+  [/^нет текущей цены$/, ()=>t('errNoPrice')],
+  [/^Blockscout недоступен/, ()=>t('errNoNet')],
+  [/^нет трансферов/, ()=>t('errNoTrades')],
+  [/^нет данных сети/, ()=>t('errNoNet')],
+];
+const trErr=s=>{ s=s||''; for(const [rx,f] of SRV_ERR){const m=s.match(rx); if(m) return f(m);} return s; };
+function applyLang(){
+  document.documentElement.lang=LANG;
+  document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-ph]').forEach(e=>e.placeholder=t(e.dataset.i18nPh));
+  document.querySelectorAll('[data-i18n-title]').forEach(e=>e.title=t(e.dataset.i18nTitle));
+  document.querySelectorAll('[data-i18n-html]').forEach(e=>e.innerHTML=t(e.dataset.i18nHtml));
+  const sel=$('langSel'); if(sel) sel.value=LANG;
+  // redraw dynamic blocks
+  renderTokens();
+  renderWalletTabs();
+  renderWManage();
+  if(window.__pf){ renderPortfolio(window.__pf, window.__pfm||{}); }
+  const fl=$('feedlist');
+  if(lastFeedId!==undefined) { /* feed redraws on next refresh */ }
+}
+function setLang(v){ LANG=v; localStorage.setItem('tt.lang',v); applyLang(); refresh(); }
+
+function sparkSvg(pts,up,W,H){
+  if(!pts||pts.length<2) return '';
+  W=W||260;H=H||48;
+  const vals=pts.map(p=>p[1]),min=Math.min(...vals),max=Math.max(...vals),r=(max-min)||max*0.01||1;
+  const step=W/(pts.length-1);
+  const d=pts.map((p,i)=>`${i?'L':'M'}${(i*step).toFixed(1)},${(H-4-(p[1]-min)/r*(H-8)).toFixed(1)}`).join('');
+  const c=up?'var(--up)':'var(--dn)';
+  return `<svg class="${W===260?'spark':'sparkl'}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <path d="${d}L${W},${H}L0,${H}Z" fill="${c}" opacity="0.07"/>
+    <path d="${d}" fill="none" stroke="${c}" stroke-width="1.6"/></svg>`;
+}
+const fmt=(p)=>{ if(p==null)return '—';
+  if(p>=1000) return p.toLocaleString(loc(),{maximumFractionDigits:2});
+  if(p>=1) return p.toFixed(3);
+  return p.toPrecision(4).replace(/e-?(\d+)/,'e-$1'); };
+const pct=(v)=>v==null?'—':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
+const liq=v=>v==null?'':'$'+(v>=1e6?(v/1e6).toFixed(1)+'M':(v/1e3).toFixed(0)+'K');
+const money=(v)=>{ if(v==null||isNaN(v))return '—';
+  const s=v<0?'−':''; v=Math.abs(v);
+  return s+'$'+(v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':v.toFixed(2)); };
+function pnlText(p){   // html for a token's pnl object
+  if(!p) return '';
+  if(p.err) return `<span class="pnl-chip" title="${trErr(p.err)}">${t('priceErrChip')}</span>`;
+  let a=p.pnl; if(!a) return '';
+  // selected wallet: THIS wallet's position, not the sum over all holders
+  // (a token may be in two wallets' watchlists — must not cross them)
+  if(ACTIVE_W && ACTIVE_W!=='*'){
+    a = (a.byWallet||{})[ACTIVE_W] || (a.byWallet||{})[ACTIVE_W.toLowerCase()];
+    if(!a) return `<span class="pnl-chip" title="${t('noPosInWallet')}">—</span>`;
+  }
+  if(a.unreliable)
+    return `<span class="pnl-chip" title="${t('unreliableT',{v:money(a.posValue)})}">⚠ n/d</span>
+      <span class="pnl-chip" title="${t('posChip',{v:money(a.posValue)})}">${t('posChip',{v:money(a.posValue)})}</span>`;
+  const v=a.pnlShow??a.pnl;
+  const pcs=a.pnlPct!=null?`${a.pnlPct>=0?'+':''}${a.pnlPct.toFixed(0)}%`:'';
+  const cls=v>=0?'pos':'neg';
+  const flag=a.noPriceData?'~':'';
+  const title=t('pnlTitle',{b:a.buys,s:a.sells,inv:money(a.invested),avg:money(a.avgCost),
+    q:a.qty.toPrecision(3),pos:money(a.posValue),u:money(a.unrealized),
+    note:a.noPriceData?t('partialNote'):'',r:money(a.realized)});
+  const chip=t('posChip',{v:money(a.posValue)});
+  return `<span class="${cls}" style="font-weight:600" title="${title.replace(/\n/g,'&#10;')}">PnL ${flag}${money(v)}${pcs?' '+pcs:''}</span>`
+       + `<span class="pnl-chip">${chip}</span>`;
+}
+const AV_COLORS=['#7c8cf8','#34d399','#f87171','#fbbf24','#22d3ee','#a78bfa','#fb7185','#4ade80'];
+// token icon: proxied /logo (server-side cache+resize); if no image or it
+// fails to load — letter avatar instead of an empty grey spot
+function tokIcon(url,sym,size){
+  const ch=((sym||'?')[0]).toUpperCase();
+  const color=AV_COLORS[(ch.charCodeAt(0)||0)%AV_COLORS.length];
+  const s=size||38;
+  const letter=`<div class="cimg" style="width:${s}px;height:${s}px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(s*0.45)}px;color:${color};background:${color}22;border-radius:50%">${ch}</div>`;
+  if(!url) return letter;
+  const esc=url.replace(/"/g,'&quot;');
+  return `<img src="/logo?u=${encodeURIComponent(esc).replace(/%2F/g,'/')}" alt="${ch}"
+    style="width:${s}px;height:${s}px;border-radius:50%;object-fit:cover;background:var(--card2);flex:none"
+    loading="lazy" decoding="async"
+    onerror="this.outerHTML=${JSON.stringify(letter).replace(/"/g,'&quot;')}">`;
+}
+
+async function api(path,body){
+  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);
+  return r.json();
+}
+// ------------------------------------------------ wallets (rotating scopes)
+let WALLETS=[], ACTIVE_W=localStorage.getItem('tt.wallet')||'*';
+// chain filter (within the selected wallet / all wallets): '' = all chains
+let ACTIVE_C=localStorage.getItem('tt.chain')||'';
+const CHAIN_LABEL={robinhood:'Robinhood',base:'Base',ethereum:'Ethereum',
+  arbitrum:'Arbitrum',optimism:'OP'};
+function chainScoped(t){
+  return !ACTIVE_C || (t.chain||'').toLowerCase()===ACTIVE_C.toLowerCase();
+}
+let PF_FULL=null;   // full portfolio snapshot (refreshPf swaps __pf for the wallet's slice)
+function holdingChains(){
+  // chains where the wallet actually holds positions (from portfolio byChain),
+  // not just those represented in the watchlist
+  const p=PF_FULL||window.__pf; if(!p||!p.wallets) return [];
+  const ws = ACTIVE_W==='*' ? p.wallets
+           : p.wallets.filter(r=>(r.wallet||'').toLowerCase()===ACTIVE_W);
+  const set=new Set();
+  for(const w of ws) for(const [c,b] of Object.entries(w.byChain||{}))
+    if(b && ((b.tokens||0)>0 || (b.value||0)>0)) set.add(c);
+  return set;
+}
+function renderChainTabs(){
+  const el=$('chainTabs'); if(!el) return;
+  const present={};
+  for(const t of lastTokens){ if(!walletScoped(t)) continue;
+    const c=t.chain||'?'; present[c]=(present[c]||0)+1; }
+  for(const c of holdingChains()) if(!(c in present)) present[c]=0;  // holds exist, no tracked tokens
+  // order: more tracked tokens — further left; on ties — known chains
+  // alphabetically, hold-only (0) — on the right
+  const keys=Object.keys(present).sort((a,b)=>(present[b]-present[a])
+    ||(CHAIN_LABEL[a]?0:1)-(CHAIN_LABEL[b]?0:1)||a.localeCompare(b));
+  if(keys.length<2){ el.style.display='none'; el.innerHTML=''; return; }
+  if(ACTIVE_C && !(ACTIVE_C in present)) { ACTIVE_C=''; localStorage.setItem('tt.chain',''); }
+  const all=`<div class="chip${ACTIVE_C===''?' act':''}" onclick="setChain('')">${t('cAll')}<span class="cn">${Object.values(present).reduce((a,b)=>a+b,0)}</span></div>`;
+  el.innerHTML=all+keys.map(c=>`<div class="chip${ACTIVE_C===c?' act':''}" onclick="setChain('${c}')" title="${present[c]?t('cTracked',{n:present[c]}):t('cHoldOnly')}">
+      ${CHAIN_LABEL[c]||c}<span class="cn">${present[c]||'·'}</span></div>`).join('');
+  el.style.display='flex';
+}
+function setChain(c){ ACTIVE_C=c; localStorage.setItem('tt.chain',c);
+  renderChainTabs(); renderTokens(); refreshPf(); }
+function walletScoped(t){
+  // '*' = all; a token without scope or with '*' shows in any view
+  if(ACTIVE_W==='*') return true;
+  const w=(t.wallets||[]);
+  return w.length===0 || w.includes('*') || w.includes(ACTIVE_W);
+}
+function renderWalletTabs(){
+  const el=$('walletTabs');
+  if(!WALLETS.length){el.style.display='none';return;}
+  el.style.display='flex';
+  const pills=[`<div class="wtab-pill${ACTIVE_W==='*'?' act':''}" onclick="setWallet('*')">
+      <span>${t('wAll')}</span><span class="wv">${WALLETS.length>1?t('walletCount',{n:WALLETS.length}):''}</span></div>`]
+    .concat(WALLETS.map(w=>{
+      const act=ACTIVE_W===w.wallet;
+      return `<div class="wtab-pill${act?' act':''}" title="${w.wallet}" onclick="setWallet('${w.wallet}')">
+        <span style="font-weight:600">${w.label}</span>
+        <span class="wv">${t('wTokensN',{n:w.tokens})}</span>
+        <span class="cdel" style="position:static;padding:0 2px;font-size:13px" onclick="event.stopPropagation();removeWallet('${w.wallet}')">✕</span></div>`;
+    }));
+  pills.push(`<div class="wtab-pill wtab-add" onclick="openSettings();setTimeout(()=>$('wallets').focus(),100)">${t('wAdd')}</div>`);
+  el.innerHTML=pills.join('');
+}
+function setWallet(w){ ACTIVE_W=w; localStorage.setItem('tt.wallet',w);
+  renderWalletTabs(); renderChainTabs(); renderTokens(); refreshPf();
+  ensureWalletFresh(w); }
+// On-demand freshness: wallet slice younger than 60s — leave it alone; older —
+// ask the server to recompute EXACTLY it (optimistically keep current numbers) and
+// quietly catch up with the snapshot once the slice updates.
+const _pfBusy={};
+async function ensureWalletFresh(w){
+  if(!w||w==='*'||!PF_FULL||!PF_FULL.wallets) return;
+  const cur=PF_FULL.wallets.find(r=>(r.wallet||'').toLowerCase()===w);
+  const age=cur&&cur.sliceTs?Date.now()-cur.sliceTs:1e12;
+  if(age<60000) return;
+  if(_pfBusy[w]) return;
+  _pfBusy[w]=true;
+  try{
+    await api('/api/wallets/refresh',{wallet:w});
+    const t0=cur&&cur.sliceTs||0;
+    for(let i=0;i<12;i++){
+      await new Promise(r=>setTimeout(r,4000));
+      const s=await api('/api/portfolio').catch(()=>null);
+      if(s&&s.portfolio){ PF_FULL=s.portfolio; window.__pf=s.portfolio; window.__pfm=s.meta;
+        const n=(s.portfolio.wallets||[]).find(x=>(x.wallet||'').toLowerCase()===w);
+        if(n&&n.sliceTs&&n.sliceTs!==t0){ refresh(); return; } }   // also pull token scopes
+    }
+  }catch(e){/* server will sort it out; the regular cycle updates anyway */}
+  finally{ delete _pfBusy[w]; }
+}
+function refreshPf(){
+  // portfolio panel: active wallet × active chain (byChain, if selected)
+  if(!window.__pf) return;
+  const p=window.__pf;
+  if(ACTIVE_W==='*'&&!ACTIVE_C){ renderPortfolio(p,window.__pfm||{}); return; }
+  const wsel=ACTIVE_W==='*'?(p.wallets||[])
+        :((p.wallets||[]).filter(r=>(r.wallet||'').toLowerCase()===ACTIVE_W));
+  if(!wsel.length) return;
+  if(!ACTIVE_C){
+    const s=wsel[0];
+    // PnL — on Robinhood only: cash-flow method on other chains confuses bridges
+    // (OUT to a bridge = "withdrew", IN from a bridge via contract isn't counted as "deposited")
+    const rh=(s.byChain||{})['robinhood'];
+    renderPortfolio({wallets:[s],pnl:rh?rh.pnl:s.pnl,value:s.value,injected:rh?rh.injected:s.injected,
+      cash:s.cash,gas:rh?rh.gas:s.gas_usd,partial:s.partial,staleCache:s.staleCache||p.staleCache,
+      ethPrice:p.ethPrice,pnlScope:rh?'robinhood':''}, window.__pfm||{});
+    return;
+  }
+  // chain selected: byChain aggregation over the selected wallets
+  let v=0, inj=0, cs=0, gs=0, nat=0, any=false, one=null;
+  for(const w of wsel){
+    const bc=(w.byChain||{})[ACTIVE_C];
+    if(!bc) continue;
+    any=true; one=one||w;
+    v+=bc.value; inj+=bc.injected; cs+=bc.cash; gs+=bc.gas; nat+=bc.native;
+  }
+  if(any){
+    // Per-chain PnL — only on the deposit chain (Robinhood). Bridge netting
+    // (portfolio.net_bridges) removes phantom PLUSes on other chains,
+    // but transit hops (relay chains A→B→CEX) leave a ±$K remainder:
+    // showing a number there = lying in the other direction. Dash + tooltip.
+    const showPnl = ACTIVE_C==='robinhood';
+    renderPortfolio({wallets:[{...one, native:nat}],
+      pnl:showPnl?Math.round((v-inj)*100)/100:null,
+      value:Math.round(v*100)/100,injected:Math.round(inj*100)/100,cash:Math.round(cs*100)/100,
+      gas:Math.round(gs*100)/100,partial:one.partial,staleCache:one.staleCache||p.staleCache,
+      ethPrice:p.ethPrice,chainScope:ACTIVE_C}, window.__pfm||{});
+  }else{
+    // the wallet holds nothing on this chain — empty panel instead of someone else's numbers
+    renderPortfolio({wallets:[{...wsel[0],err:t('noPosChain',{c:CHAIN_LABEL[ACTIVE_C]||ACTIVE_C}),
+      noDataChain:true}],pnl:null,ethPrice:p.ethPrice}, window.__pfm||{});
+  }
+}
+let SCAN={};
+async function addWallets(){
+  const raw=$('wallets').value.trim(); if(!raw)return;
+  $('scanLog').textContent=t('scanning');
+  const r=await api('/api/wallets/add',{wallets:raw});
+  if(!r.ok){ $('scanLog').textContent=r.msg||'error'; return; }
+  $('wallets').value='';
+  renderWManage(); refresh();
+}
+function scanLine(w){
+  // background wallet-scan status: … / result
+  const s=SCAN[w];
+  if(!s) return '';
+  if(s.running) return `<span style="color:#e8a33d">⏳ ${t('scanning')}</span>`;
+  if(s.err) return `<span class="neg">${t('scanErr',{e:s.err})}</span>`;
+  return `<span class="pos">${t('scanAdded',{n:(s.added||[]).length})}</span>`+
+         ` · ${t('scanFiltered',{n:(s.skipped||[]).length})}`+
+         (s.byChain?` · ${Object.entries(s.byChain).map(([c,n])=>c+':'+n).join(' ')}`:'');
+}
+async function removeWallet(w){
+  if(!confirm(t('delWalletConfirm',{a:'0x'+w.slice(2,6)+'…'+w.slice(-4)})))return;
+  await api('/api/wallets/remove',{wallet:w});
+  if(ACTIVE_W===w) setWallet('*'); else refresh();
+}
+async function scanWalletNow(w){
+  const r=await api('/api/wallets/scan',{wallet:w});
+  SCAN[w]={running:true,ts:Date.now()};
+  renderWManage(); refresh();
+}
+function renderWManage(){
+  const el=$('wManage'); if(!el) return;
+  if(!WALLETS.length){ el.innerHTML=''; return; }
+  el.innerHTML=WALLETS.map(w=>`<div style="display:flex;gap:8px;align-items:center;background:var(--card2);
+      border:1px solid var(--line);border-radius:8px;padding:5px 10px;margin-bottom:4px;font-size:12px;flex-wrap:wrap">
+    <span style="font-family:Consolas,monospace">${w.label}</span>
+    <span style="color:var(--mut);margin-left:auto">${t('wTokensN',{n:w.tokens})}</span>
+    ${scanLine(w.wallet)?`<span style="width:100%;font-size:11px">${scanLine(w.wallet)}
+      <span class="pflnk" style="font-size:10px" onclick="delete SCAN['${w.wallet}'];renderWManage()">✕</span></span>`:''}
+    <span class="pflnk" onclick="scanWalletNow('${w.wallet}')">${t('wScan')}</span>
+    <span class="pflnk" style="color:var(--dn)" onclick="removeWallet('${w.wallet}')">${t('wDel')}</span></div>`).join('');
+}
+function card(t){
+  const up=(t.h1??0)>=0;
+  const open=t.url?`<a class="card${t.stale?' stale':''}" id="c-${t.addr}" href="${t.url}" target="_blank" rel="noopener" title="${t2('openChart')}">`
+                  :`<div class="card${t.stale?' stale':''}" id="c-${t.addr}">`;
+  const closeTag=t.url?'</a>':'</div>';
+  return `${open}
+    <span class="cdel" title="${t2('rmT')}" onclick="event.preventDefault();event.stopPropagation();delToken('${t.addr}')">✕</span>
+    <div class="chead">
+      ${tokIcon(t.logo,t.symbol,38)}
+      <div><div class="csym">${(t.symbol&&t.symbol!=='…')?t.symbol:(t.addr?t.addr.slice(0,6)+'…'+t.addr.slice(-4):'?')} ${t.chain?`<span style="font-size:9px;font-weight:600;color:var(--acc);background:var(--card2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;vertical-align:middle">${t.chain}</span>`:''}</div><div class="cname">${t.name||t2('listingWait')}</div></div>
+    </div>
+    <div class="price">${fmt(t.price)} <small>USD</small></div>
+    ${t.pnl?`<div class="pnl-line">${pnlText(t.pnl)}</div>`:''}
+    <div class="chgs">
+      <div class="chg"><span>${t2('chg5m')}</span><b>${pct(t.m5)}</b></div>
+      <div class="chg"><span>${t2('chg1h')}</span><b>${pct(t.h1)}</b></div>
+      <div class="chg"><span>${t2('chg24h')}</span><b>${pct(t.h24)}</b></div>
+    </div>
+    <div class="meta"><span>${t2('liqShort')} ${liq(t.liquidity)}</span><span>${t2('mcapShort')} ${liq(t.mcap)}</span></div>
+    ${t.effWindows?t.effWindows.filter(w=>w.name!=='24h').map(w=>{
+        const a=t.adaptiveActive&&w.threshold!==w.base;
+        return `<span style="font-size:10px;color:${a?'var(--acc)':'var(--mut)'}">`
+          +`${w.name}≥${a?w.threshold+' ('+t2('baseWord')+' '+w.base+')':w.threshold+'%'}</span>`}).join(' · ')
+      + (t.adaptiveActive?` <span style="font-size:10px;color:var(--acc)">${t2('autoTag')}</span>`:''):''}
+    ${sparkSvg(t.spark,up)}
+  ${closeTag}`;
+}
+const t2=k=>t(k);   // alias: inside card() the parameter shadows the global t
+function feedItem(f){
+  const dir=f.direction==='up'?'🚀':'🔻', cl=f.direction==='up'?'pos':'neg';
+  const time=new Date(f.ts).toLocaleTimeString(loc());
+  const reason=f.reason==='spike'?t('reasonSpike'):t('reasonTrend');
+  const tg=f.tg.startsWith('ok')?'<span class="tg-badge ok">TG ✓</span>':
+           f.tg.startsWith('err')?`<span class="tg-badge err" title="${f.tg}">TG ✗</span>`:'<span class="tg-badge">…</span>';
+  // market cap: live from the token's current state, fallback — slice at alert time
+  const cur=tokMap[f.addr];
+  const mcap=(cur&&cur.mcap)||f.mcap;
+  const inner=`${tokIcon(f.logo||(cur&&cur.logo),f.symbol,26)}
+    <div><b class="${cl}">${dir} ${f.symbol}${f.chain?' ('+f.chain+')':''} ${f.pct>0?'+':''}${f.pct.toFixed(1)}%</b>
+      <span style="color:var(--mut)"> ${t('inWord')} ${f.window} · ${reason} · MC ${mcap?liq(mcap):'—'}</span></div>
+    <span class="t">${tg} ${time}</span>`;
+  const href=f.url||(cur&&cur.url);
+  return href?`<a class="feed-item" href="${href}" target="_blank" rel="noopener" title="${t('openChart')}">${inner}</a>`
+             :`<div class="feed-item">${inner}</div>`;
+}
+function sortTokens(list){
+  const moveAbs=t=>Math.max(Math.abs(t.m5??0),Math.abs(t.h1??0));
+  const k=sortKey;
+  const arr=[...list];
+  arr.sort((a,b)=>{
+    switch(k){
+      case 'move': return moveAbs(b)-moveAbs(a);
+      case 'pnl':  {   // in wallet mode — by this wallet's position
+        const wp = x => { const g = x.pnl&&x.pnl.pnl; if(!g||g.unreliable) return -1e9;
+          if(ACTIVE_W!=='*'){ const w=(g.byWallet||{})[ACTIVE_W]||(g.byWallet||{})[ACTIVE_W.toLowerCase()];
+            return (!w||w.unreliable)?-1e9:(w.pnlPct??-1e9); }
+          return g.pnlPct??-1e9; };
+        return wp(b)-wp(a); }
+      case 'symbol': return (a.symbol||'').localeCompare(b.symbol||'');
+      case 'price':  return (b.price??0)-(a.price??0);
+      case 'm5':   return (b.m5??-1e9)-(a.m5??-1e9);
+      case 'h1':   return (b.h1??-1e9)-(a.h1??-1e9);
+      case 'h24':  return (b.h24??-1e9)-(a.h24??-1e9);
+      case 'liq':  return (b.liquidity??0)-(a.liquidity??0);
+      case 'added':return (b.addedTs??0)-(a.addedTs??0);
+      default:     return (b.mcap??0)-(a.mcap??0);
+    }
+  });
+  return arr;
+}
+function filterTokens(list){
+  const q=$('q').value.trim().toLowerCase();
+  let out=list.filter(t=>walletScoped(t)&&chainScoped(t));   // wallet + chain scope
+  if(!q) return out;
+  return out.filter(t=>((t.symbol||'')+' '+(t.name||'')+' '+(t.chain||'')+' '+t.addr).toLowerCase().includes(q));
+}
+function setSort(k){ sortKey=k; localStorage.setItem('tt.sort',k); $('sortSel').value=k; renderTokens(); }
+function setView(v){ viewMode=(viewMode===v)?'auto':v; localStorage.setItem('tt.view',viewMode); renderTokens(); }
+function effView(n){
+  if(viewMode==='auto') return n>=AUTO_LIST_N?'list':'grid';
+  return viewMode;
+}
+function listRow(t){
+  const up=(t.h1??0)>=0;
+  return `<tr class="trow" data-addr="${t.addr}" ${t.url?`onclick="window.open('${t.url}','_blank','noopener')"`:''}>
+    <td style="width:34px">${tokIcon(t.logo,t.symbol,24)}</td>
+    <td><span class="tsym">${(t.symbol&&t.symbol!=='…')?t.symbol:t.addr.slice(0,6)+'…'}</span>
+        ${t.chain?`<span class="sgchain" style="font-size:9px;color:var(--acc)">${t.chain}</span>`:''}
+        <div class="cname" style="max-width:170px">${t.name||''}</div></td>
+    <td class="num">${fmt(t.price)}</td>
+    <td class="num">${pct(t.m5)}</td>
+    <td class="num">${pct(t.h1)}</td>
+    <td class="num">${pct(t.h24)}</td>
+    <td class="num">${liq(t.mcap)||'—'}</td>
+    <td class="num">${t.pnl?pnlText(t.pnl):'—'}</td>
+    <td class="num">${liq(t.liquidity)||'—'}</td>
+    <td style="width:96px">${sparkSvg(t.spark,up,90,26)}</td>
+    <td style="width:26px;text-align:right"><span class="cdel" style="position:static" title="${t2('rmT')}"
+        onclick="event.stopPropagation();delToken('${t.addr}')">✕</span></td>
+  </tr>`;
+}
+function renderList(list){
+  const cols=[['','',0],[t('thTicker'),'',0],[t('thPrice'),1,0],[t('chg5m'),1,0],[t('chg1h'),1,0],[t('chg24h'),1,0],['MC',1,0],['PnL',1,0],[t('thLiq'),1,0],[t('thChart'),0,0],['',0,0]];
+  const keymap=['','symbol','price','m5','h1','h24','mcap','pnl','liq','',''];
+  $('tlist').querySelector('thead').innerHTML='<tr>'+cols.map((c,i)=>
+    keymap[i]?`<th class="${c[1]?'num':''} ${sortKey===keymap[i]?'act':''}" onclick="setSort('${keymap[i]}')">${c[0]}${sortKey===keymap[i]?' ▾':''}</th>`
+             :`<th class="${c[1]?'num':''}">${c[0]}</th>`).join('')+'</tr>';
+  $('tlist').querySelector('tbody').innerHTML=list.map(listRow).join('');
+}
+let pfOpen=false;
+function pfMoney(v){ const s=v<0?'−':''; v=Math.abs(v);
+  return s+'$'+(v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e4?(v/1e3).toFixed(1)+'K':v.toFixed(2)); }
+function copyAddr(a){
+  const t=(navigator.clipboard?navigator.clipboard.writeText(a):Promise.reject())
+    .catch(()=>{ const i=document.createElement('textarea'); i.value=a;
+      document.body.appendChild(i); i.select(); document.execCommand('copy'); i.remove(); });
+}
+function renderPortfolio(p,meta){
+  const el=$('pfbar');
+  if(!p||!p.wallets||!p.wallets.length){el.style.display='none';return;}
+  const w=p.wallets[0];
+  if(w.err){el.style.display='block';
+    el.innerHTML=`<span class="pf-cap">${t('pfWallet')}</span> <span class="neg">${trErr(w.err)}</span> · <span class="pflnk" onclick="refresh()">${t('retryWord')}</span>`;return;}
+  const cls=p.pnl>=0?'pos':'neg';
+  const injected=Math.abs(p.injected)>0.005?p.injected:(w.deposits+w.native_dep);
+  const gasUsd=(p.gas!=null?p.gas:(w.gas_usd||0))||0;         // network fees, USD
+  const mktPnl=p.pnl+gasUsd;                                  // market PnL: everything except gas
+  const mcls=mktPnl>=0?'pos':'neg';
+  const pctv=injected>0.005?mktPnl/injected*100:null;
+  const ageS=meta&&meta.ts?Math.round((Date.now()-meta.ts)/1000):null;
+  const stale=!!(p.staleCache||(meta&&meta.stale));
+  const upd=ageS==null?'':stale?(ageS<60?t('updStale',{n:ageS}):t('updStaleM',{n:Math.round(ageS/60)}))
+    :ageS<60?t('updFresh',{n:ageS}):t('updFreshM',{n:Math.round(ageS/60)});
+  let h=`<div class="pfhead">
+    <div><div class="pf-cap">${t('pfWallet')}${p.chainScope?` · <span style="color:var(--acc)">${CHAIN_LABEL[p.chainScope]||p.chainScope}</span>`:''} · <span class="pf-addr" title="${t('copiedT',{a:w.wallet})}" onclick="copyAddr('${w.wallet}')">${w.wallet.slice(0,6)}…${w.wallet.slice(-4)}</span></div>
+      <div class="pf-bal" title="${t('balTitle')}"${stale?' style="opacity:.65"':''}>${p.partial?'≈':''}${money(p.value)}</div></div>
+    <div><div class="pf-cap">${t('pnlNoGasCap')}${p.pnlScope?` · ${(CHAIN_LABEL[p.pnlScope]||p.pnlScope)}`:''}</div>
+      ${p.pnl==null?`<div class="pf-pnl" style="color:var(--mut);font-size:14px" title="${t('pnlBridgeT')}">—</div>`
+        :`<div class="pf-pnl ${mcls}" title="${t('pnlNoGasT')}${p.pnlScope?t('pnlScopeT',{c:CHAIN_LABEL[p.pnlScope]||p.pnlScope}):''}"${stale?' style="opacity:.65"':''}>${mktPnl>=0?'+':'−'}${money(Math.abs(mktPnl))}${pctv!=null?`<span class="pf-pct ${mcls}">${pctv>=0?'+':'−'}${Math.abs(pctv).toFixed(1)}%</span>`:''}</div>`}</div>
+    ${gasUsd>0.005?`<div><div class="pf-cap">${t('gasCap')}</div>
+      <div class="pf-pnl neg" title="${t('gasT',{n:w.gas_txs||'?',e:w.gas_eth||'?',v:money(gasUsd)})}" style="font-size:14px;opacity:.9">−${money(gasUsd)}</div></div>`:''}
+    <div class="pf-right">
+      <span class="pflnk" onclick="pfOpen=!pfOpen;renderPortfolio(window.__pf,window.__pfm)">${pfOpen?t('collapseW'):t('detailsW')}</span>
+      ${upd?`<span style="font-size:10px;color:${stale?'#e8a33d':'var(--mut)'}">${upd}</span>`:''}</div>
+  </div>`;
+  if(pfOpen){
+    h+=`<div class="pfdet">
+    <div class="pf-stats">${[
+      [t('stTokens'),money(posSum(w))],[t('stCash'),money(w.cash)],[t('stEth'),money(w.native)],
+      [t('stDep'),money(w.deposits+w.native_dep)],[t('stWdr'),money(w.withdrawals)],
+      [t('stGas',{tx:w.gas_txs?t('stGasTx',{n:w.gas_txs}):''}),money(w.gas_usd||0),
+        t('gasEthT',{e:w.gas_eth||0})],
+      ...(w.bridges?[[t('stBridges'),`${w.bridges.pairs} · ${money(w.bridges.usd)}`,t('stBridgesT')]]:[])
+    ].filter(r=>Math.abs(r[1].replace(/[^\d.]/g,''))>0||[t('stTokens')].includes(r[0])).map(r=>
+      `<div>${r[0]}<span class="v"${r[2]?` title="${r[2]}"`:''}>${r[2]?`<small style="font-size:9px;color:var(--mut)">${r[2]}</small> `:''}${r[1]}</span></div>`).join('')}</div>`;
+    const toks=w.tokens||[];
+    if(toks.length){
+      const maxV=Math.max(...toks.map(t=>t.value),0.01);
+      const posVal=posSum(w);
+      const shown=pfAll?toks:toks.slice(0,10);
+      h+=`<div class="pf-list">`+shown.map(t=>
+        `<div class="pf-row" title="${t.qty} ${t.sym} ${t2('byWord')}${money(t.price)}"><span class="sym">${t.sym}</span>`+
+        `<span class="v">${money(t.value)}</span><span class="share">${posVal>0?(t.value/posVal*100).toFixed(0):0}%</span>`+
+        `<span class="pf-bar" style="--w:${Math.max(2,t.value/maxV*100).toFixed(0)}%"></span></div>`).join('');
+      if(toks.length>10)h+=`<div style="text-align:center;margin-top:4px"><span class="pflnk" onclick="pfAll=!pfAll;renderPortfolio(window.__pf,window.__pfm)">${pfAll?t('collapseListW'):t('showAllW',{n:toks.length})}</span></div>`;
+      h+=`</div>`;
+    }
+    if(w.unpriced&&w.unpriced.length)h+=`<div style="margin-top:6px;font-size:11px;color:var(--mut)">${t('unpricedRow',{l:w.unpriced.map(u=>u.sym).slice(0,12).join(', ')+(w.unpriced.length>12?` …+${w.unpriced.length-12}`:'')})}</div>`;
+    h+=`<div style="margin-top:8px;font-size:11px;color:var(--mut);line-height:1.5">
+      ${t('footerVal',{chains:(()=>{const ks=Object.keys(w.byChain||{});return ks.length?` (${t('chainsIn')}: ${ks.map(c=>CHAIN_LABEL[c]||c).join(', ')})`:'';})()})}
+      ${gasUsd>0?t('footerGas',{g:money(gasUsd)}):''}
+    </div></div>`;
+  }
+  window.__pf=p;window.__pfm=meta;
+  el.style.display='block';el.innerHTML=h;
+}
+function posSum(w){ return (w.tokens||[]).reduce((s,t)=>s+t.value,0); }
+let pfAll=false;
+function renderTokens(){
+  const all=lastTokens, n=all.length;
+  renderChainTabs();                                   // chain chips (by wallet scope)
+  $('toolbar').style.display=n?'flex':'none';
+  $('count').innerHTML=(n?`${t('showOf',{a:filterTokens(all).length,n:n})} · ${effView(n)==='list'?t('listWord'):t('gridWord')}${viewMode==='auto'&&n>=AUTO_LIST_N?t('autoWord'):''}`:'');
+  $('vGrid').classList.toggle('act',effView(n)==='grid');
+  $('vList').classList.toggle('act',effView(n)==='list');
+  $('empty').style.display=n?'none':'block';
+  const shown=sortTokens(filterTokens(all));
+  if(effView(n)==='list'){
+    $('grid').style.display='none'; $('tlist').style.display='table';
+    renderList(shown);
+  }else{
+    $('tlist').style.display='none'; $('grid').style.display='grid';
+    $('grid').innerHTML=shown.map(card).join('');
+  }
+}
+async function refresh(){
+  try{
+    const s=await api('/api/state'); CFG=s.config;
+    PNL_META=s.pnlMeta||PNL_META;
+    SCAN=s.scan||{};
+    WALLETS=s.wallets||[];
+    if(ACTIVE_W!=='*' && !WALLETS.some(w=>w.wallet===ACTIVE_W)) ACTIVE_W='*';
+    renderWalletTabs();
+    PF_FULL=s.portfolio;
+    renderPortfolio(s.portfolio,s.portfolioMeta||{});
+    refreshPf();
+    tokMap={}; for(const t of s.tokens) tokMap[t.addr]=t;
+    $('polltext').textContent=`${t('pollAt',{t:s.lastPoll?new Date(s.lastPoll).toLocaleTimeString(loc()):'—'})}${s.pollError?t('errSfx'):''}`;
+    $('dot').className='dot'+(s.pollError?' bad':'');
+    lastTokens=s.tokens; renderTokens();
+    $('feedlist').innerHTML=s.feed.length?s.feed.map(feedItem).join('')
+      :`<div style="color:var(--mut);font-size:13px">${t('feedEmpty')}</div>`;
+    if(s.feed.length&&lastFeedId&&s.feed[0].id!==lastFeedId){
+      const c=$('c-'+s.feed[0].addr); if(c){c.classList.remove('alert-flash');void c.offsetWidth;c.classList.add('alert-flash');}
+    }
+    if(s.feed.length) lastFeedId=s.feed[0].id;
+  }catch(e){ $('polltext').textContent=t('serverDown'); $('dot').className='dot bad'; }
+}
+async function addToken(){
+  const v=$('addr').value.trim(); if(!v)return;
+  const r=await api('/api/tokens/add',{addr:v,wallet:ACTIVE_W!=='*'?ACTIVE_W:''});
+  let msg = (r.added&&r.added.length)?t('addedN',{n:r.added.length}):t('skippedEmpty');
+  const sk=r.skipped||[];
+  if(sk.length){
+    msg+=t('skippedN',{n:sk.length});
+    msg+=' · '+sk.map(x=>typeof x==='string'?x:t(x.why==='dup'?'skDup':'skBad',{a:x.a})).join('; ');
+  }
+  $('msg').textContent=msg;
+  if(r.ok){$('addr').value=''; setTimeout(refresh,1500);}
+  else $('msg').style.color='var(--dn)';
+  if(r.ok) $('msg').style.color='var(--mut)';
+}
+async function delToken(a){
+  if(!confirm(t('delConfirm')))return;
+  await api('/api/tokens/remove',{addr:a,wallet:ACTIVE_W!=='*'?ACTIVE_W:''}); refresh();
+}
+function openSettings(){
+  const t0=CFG.telegram||{};
+  $('tg-token').value=t0.botToken||''; $('tg-chat').value=t0.chatId||'';
+  $('snd-on').checked=CFG.soundEnabled; $('vol').value=CFG.volume; $('volnum').textContent=CFG.volume+'%';
+  $('poll').value=CFG.pollSeconds; $('cool').value=CFG.cooldownSeconds;
+  $('pnlIvl').value=CFG.pnlIntervalSec??60; $('pfIvl').value=CFG.portfolioIntervalSec??60;
+  $('scanIvl').value=CFG.scanIntervalSec??120;
+  const ad=CFG.adaptive||{};
+  $('ad-on').checked=!!ad.enabled; $('ad-k').value=ad.k??4; $('ad-lb').value=ad.lookbackMin??30;
+  $('wallets').value=''; $('wallets').placeholder=t('addWalletsPh');
+  $('scanLog').textContent='';
+  renderWManage();
+  $('pnlStatus').textContent=PNL_META.running?t('pnlRunning'):(PNL_META.ts?t('pnlUpd',{t:new Date(PNL_META.ts).toLocaleTimeString(loc())}):t('pnlNone'));
+  $('langSel').value=LANG;
+  $('wtab').innerHTML=CFG.windows.map((w,i)=>`<tr>
+    <td>${w.name}</td><td><input type="number" data-i="${i}" data-f="seconds" value="${w.seconds}" ${w.name==='24h'?'disabled':''}></td>
+    <td><input type="number" data-i="${i}" data-f="threshold" value="${w.threshold}" step="1"></td></tr>`).join('');
+  $('settings').showModal();
+}
+async function saveSettings(){
+  const windows=[...document.querySelectorAll('#wtab input')].reduce((acc,el)=>{
+    const i=+el.dataset.i; acc[i]=acc[i]||{...CFG.windows[i]}; acc[i][el.dataset.f]=+el.value; return acc;},[]);
+  await api('/api/config',{pollSeconds:+$('poll').value,cooldownSeconds:+$('cool').value,
+    pnlIntervalSec:+$('pnlIvl').value||60,portfolioIntervalSec:+$('pfIvl').value||60,
+    scanIntervalSec:+$('scanIvl').value||120,
+    volume:+$('vol').value,soundEnabled:$('snd-on').checked,windows,
+    adaptive:{enabled:$('ad-on').checked,k:+$('ad-k').value||4,lookbackMin:+$('ad-lb').value||30},
+    telegram:{botToken:$('tg-token').value.trim(),chatId:$('tg-chat').value.trim()}});
+  $('settings').close(); refresh();
+}
+async function testTg(){
+  const r=await api('/api/test-telegram');
+  alert(r.ok?t('testTgOk'):'❌ '+r.msg);
+}
+async function testAlert(){
+  const r=await api('/api/test-alert');
+  alert(r.ok?t('testAlertOk'):t('testAlertWarn')+r.msg);
+}
+async function testSound(){ await api('/api/test-sound',{direction:'blip'}); }
+let sgTimer=null, sgItems=[], sgSel=-1, sgSeq=0;
+function looksLikeAddr(v){
+  const p=v.split(',').map(x=>x.trim()).filter(Boolean);
+  return p.length && p.every(x=>/^0x[0-9a-fA-F]{40,}$/.test(x)||/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(x));
+}
+function hideSuggest(){ $('suggest').style.display='none'; sgSel=-1; }
+async function suggest(q){
+  const box=$('suggest');
+  q=q.trim();
+  if(q.length<2||looksLikeAddr(q)||q.includes('\n')){ hideSuggest(); return; }
+  const seq=++sgSeq;
+  try{
+    const r=await api('/api/search?q='+encodeURIComponent(q));
+    if(seq!==sgSeq) return;                    // stale debounced response
+    sgItems=r.results||[]; sgSel=-1;
+    if(!sgItems.length){
+      box.innerHTML=`<div class="sgempty">${t('sgNone')}</div>`;
+      box.style.display='block'; return;
+    }
+    box.innerHTML=sgItems.map((t,i)=>`<div class="sg" data-i="${i}"
+        onmousedown="pickSuggest(${i});event.preventDefault()">
+      ${tokIcon(t.logo,t.symbol,24)}
+      <div><span class="sgsym">${(t.symbol||'?')}</span><span class="sgchain">${t.chain||''}</span>
+        <div class="sgname">${t.name||''}</div></div>
+      <div class="sgright">${t.inList?`<span class="sgin">${t2('sgInList')}</span>`:
+        (t.liquidity?liq(t.liquidity)+' '+t2('sgLiq'):'')}${t.h1!=null?`<div class="${t.h1>=0?'pos':'neg'}">${t.h1>=0?'+':''}${t.h1.toFixed(1)}% ${t2('chg1h')}</div>`:''}</div>
+    </div>`).join('');
+    box.style.display='block';
+  }catch(e){ hideSuggest(); }
+}
+function pickSuggest(i){
+  const t=sgItems[i]; if(!t)return;
+  hideSuggest();
+  $('addr').value = t.addr;
+  addToken();
+}
+function sgMove(d){
+  const box=$('suggest');
+  if(box.style.display!=='block'||!sgItems.length)return;
+  sgSel=(sgSel+d+sgItems.length)%sgItems.length;
+  box.querySelectorAll('.sg').forEach((el,i)=>el.classList.toggle('sel',i===sgSel));
+  const el=box.querySelector('.sg.sel'); if(el) el.scrollIntoView({block:'nearest'});
+}
+$('addr').addEventListener('input',e=>{
+  clearTimeout(sgTimer);
+  const v=e.target.value;
+  if(looksLikeAddr(v)||v.trim().length<2){ hideSuggest(); return; }
+  sgTimer=setTimeout(()=>suggest(v),280);
+});
+$('addr').addEventListener('keydown',e=>{
+  const open=$('suggest').style.display==='block'&&sgItems.length;
+  if(e.key==='ArrowDown'&&open){ e.preventDefault(); sgMove(1); }
+  else if(e.key==='ArrowUp'&&open){ e.preventDefault(); sgMove(-1); }
+  else if(e.key==='Enter'&&open&&sgSel>=0){ e.preventDefault(); pickSuggest(sgSel); }
+  else if(e.key==='Enter'){ hideSuggest(); addToken(); }
+  else if(e.key==='Escape'){ hideSuggest(); }
+});
+$('addr').addEventListener('blur',()=>setTimeout(hideSuggest,150));
+$('addr').addEventListener('focus',e=>{ if(e.target.value.trim().length>=2&&!looksLikeAddr(e.target.value)) suggest(e.target.value); });
+$('q').addEventListener('input',()=>renderTokens());
+$('sortSel').value=sortKey;
+$('vol').addEventListener('input',e=>$('volnum').textContent=e.target.value+'%');
+applyLang();
+refresh(); setInterval(refresh,5000);
+</script>
+</body>
+</html>

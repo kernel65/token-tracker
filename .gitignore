@@ -1,0 +1,14 @@
+# local state, secrets, caches — never commit
+data/
+__pycache__/
+*.pyc
+*.lnk
+github_token
+push_github.sh
+gh_setup.py
+gh_debug.sh
+body.json
+gh_body*.json
+tk.b64
+gh_data_push.py
+sm.json
