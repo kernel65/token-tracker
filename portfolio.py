@@ -30,6 +30,22 @@ import urllib.parse
 import pnl  # _get, _rpc_call, quote_usd, BS_CHAINS
 
 STABLE_SYMS = {"USDG", "USDC", "USDT", "DAI", "FDUSD", "PYUSD", "EURC", "USDBC"}
+# Canon stable contracts per chain (verified: name + holder counts, Blockscout).
+# A symbol-only rule is poisonable: spam airdrops named "USDT"/"USDC" with
+# identical qty across 3 non-canon addresses drew $19.4K fake "cash" (a real
+# drop of 6469.20 × fake decimals). Position counts as cash only on a canon
+# address; non-canon "stable" is junk — priced as a regular token (no pool).
+STABLE_CANON = {
+    "ethereum": {"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",   # USDC
+                 "0xdac17f958d2ee523a2206206994597c13d831ec7"},  # USDT
+    "arbitrum": {"0xaf88d065e77c8cc2239327c5edb3a432268e5831",   # USDC native
+                 "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",   # USDT0 (LayerZero)
+                 "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"},  # USDC.e bridged
+    "base":     {"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"},  # USDC
+    "optimism": {"0x0b2c639c533813f4aa9d7837caf62653d097ff85",   # USDC
+                 "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58"},  # USDT bridged
+    "robinhood": {"0x5fc5360d0400a0fd4f2af552add042d716f1d168"},  # USDG (Paxos)
+}
 # DEX/relay routers: stable-OUT to them is a swap (the result may be native
 # ETH, invisible in token-transfers), NEVER a withdrawal from the system
 # DEX/relay routers: stable-OUT to them is a swap (the result may be native
@@ -126,11 +142,19 @@ def _get_all(url, max_pages=40):
 
 # ------------------------------------------------- transfers -> flows/positions
 
-def parse_flows(wallet, transfers):
+def _is_stable(chain, addr, sym):
+    """Stable only on a CANON contract: airdrops named USDT/USDC (same fake
+    qty on several junk addresses) must not count as cash at $1 each."""
+    return (sym in STABLE_SYMS
+            and addr.lower() in STABLE_CANON.get(chain, set()))
+
+
+def parse_flows(wallet, transfers, chain=None):
     """From token-transfers records: tx groups + the wallet's net token balances.
 
     Each group: {ts, s_in, s_in_eoa, s_out, s_out_to_eoa, tok_in[], tok_out[]}
     Plus net: {addr: {sym, qty}} — incoming sum minus outgoing.
+    chain: enable canon-stable gating (non-canon USDT/USDC drops are junk).
     """
     wl = wallet.lower()
     txs, net = {}, {}
@@ -165,7 +189,8 @@ def parse_flows(wallet, transfers):
                                 "s_out_to_eoa": 0.0, "s_out_router": 0.0,
                                 "tok_in": [], "tok_out": []})
         e["ts"] = max(e["ts"], _ms(it.get("timestamp")))
-        if sym in STABLE_SYMS:
+        is_stable = _is_stable(chain, addr, sym) if chain else (sym in STABLE_SYMS)
+        if is_stable:
             if t_h == wl:
                 e["s_in"] += val
                 if not f_c:
@@ -296,7 +321,7 @@ def portfolio_for_wallet(wallet, chains=("robinhood",), etpx=None, prev=None,
         ccash = cpv = cnat = cndep = 0.0
         cdep = cwdr = cgas = 0.0
         r["noData"] = False
-        flows, positions = parse_flows(wallet, tr)
+        flows, positions = parse_flows(wallet, tr, chain=chain)
         a = aggregate(flows)
         for k in ("deposits", "withdrawals", "churn_net"):
             r[k] += a[k]
@@ -319,8 +344,11 @@ def portfolio_for_wallet(wallet, chains=("robinhood",), etpx=None, prev=None,
                                     if p["sym"] not in STABLE_SYMS])
         for p in positions:
             if p["sym"] in STABLE_SYMS:
-                r["cash"] += p["qty"]
-                ccash += p["qty"]
+                # ticker says stable: only the CANON contract counts as cash —
+                # a non-canon "USDT"/"USDC" drop is spam, keep it invisible
+                if _is_stable(chain, p["addr"], p["sym"]):
+                    r["cash"] += p["qty"]
+                    ccash += p["qty"]
                 continue
             px, unk = pnl.quote_usd(chain, p["addr"], p["sym"], symbol_fallback=False)
             if unk or not px:

@@ -274,9 +274,45 @@ def _legs_from_bs(chain, d):
 # ------------------------------------------- USD price of quote legs
 
 QUOTE_USD = {}   # (chain,tok) -> (ts, price|None)
-_Q_TTL_POS = 6 * 3600    # price known — keep for 6 h
+_Q_TTL_POS = 10 * 60     # known price — keep 10 min: memecoins slide for hours
+                         # between quotes; a 6h TTL showed DeBank $202 while the
+                         # dashboard drew $220 purely from a stale SCHIFFY price
 _Q_TTL_NEG = 10 * 60     # "no pool" — 10 min: a DexScreener timeout must not
                          # hide real prices for hours
+
+
+# counterparty tokens whose pools are trusted as market anchors
+MAJOR_QUOTES = {"WETH", "ETH", "WBTC", "USDC", "USDT", "USDG", "USDT0", "DAI",
+                "FDUSD", "PYUSD", "EURC", "USDBC"}
+
+
+def _pool_consensus(cands):
+    """USD price from own-chain pools: MEDIAN consensus first, liquidity second.
+    cands: [(liq_usd, price_usd, quote_symbol)].
+
+    «Most liquid pool» alone is poisonable: a WBTC/CRO defiswap pool reported
+    $522,985,305,301 with fake $7.7B liquidity while 30 honest pools agreed on
+    ~$76.7K → $66M phantom balance. Rules:
+      2+ pools: keep those within ±15% of the (lower) median, take the most
+                liquid of them;
+      one pool (no corroboration): accept ONLY against a major quote
+                (USDC/USDT/WETH/…), else unpriced — attacker-set spam pools
+                quote against junk tokens and must not enter balances."""
+    good = [(l, p, q) for l, p, q in cands if p > 0]
+    if not good:
+        return None
+    if len(good) >= 2:
+        ps = sorted(p for _, p, _ in good)
+        med = ps[(len(ps) - 1) // 2]          # lower median: 2-element poison
+        near = [(l, p) for l, p, _ in good if abs(p - med) / med <= 0.15]
+        if near:
+            return max(near, key=lambda x: x[0])[1]
+    majors = [(l, p) for l, p, q in good if (q or "").upper() in MAJOR_QUOTES]
+    if majors:
+        return max(majors, key=lambda x: x[0])[1]
+    if len(good) >= 2:
+        return max(good, key=lambda x: x[0])[1]  # wide-spread crowd: best liq
+    return None                                   # lone junk-quote pool: unpriced
 
 # ------------------------------------------------------------------ transfers cache
 # (url) -> {"key": id-key of the last seen item, "items": [...]}
@@ -381,26 +417,33 @@ def quote_usd_batch(chain, toks):
                           timeout=12, tries=1)   # negative is appended on the next cycle
         except Exception:
             d = None
-        best = {}   # addr -> (liq, price) — most liquid pool on this chain
+        best = {}   # addr -> [(liq, price, quote_sym)] — own-chain pool set
+        wanted = set(chunk)
         seen_any = set()   # address present in the response on ANY chain — not "poolless"
         for p in (d or {}).get("pairs") or []:
             bt = ((p.get("baseToken") or {}).get("address") or "").lower()
             if bt:
                 seen_any.add(bt)
-            if p.get("chainId") != chain:
+            if p.get("chainId") != chain or bt not in wanted:
+                # address-first match, like single quote_usd: pairing only by
+                # chain lets a poison pool where our token is the QUOTE slip in
                 continue
             liq = (p.get("liquidity") or {}).get("usd") or 0
             try:
                 pu = float(p["priceUsd"])
             except Exception:
                 continue
-            if pu > 0 and (bt not in best or liq >= best[bt][0]):
-                best[bt] = (liq, pu)
+            if pu > 0:
+                best.setdefault(bt, []).append(
+                    (liq, pu, ((p.get("quoteToken") or {}).get("symbol") or "")))
         for a in chunk:
-            if (chain, a) in QUOTE_USD and time.time() - QUOTE_USD[(chain, a)][0] < 6 * 3600:
+            hit = QUOTE_USD.get((chain, a))
+            if hit and time.time() - hit[0] < _Q_TTL_POS:
                 continue                     # a parallel thread already warmed it
             if a in best:
-                QUOTE_USD[(chain, a)] = (time.time(), best[a][1])
+                px = _pool_consensus(best[a])
+                if px:
+                    QUOTE_USD[(chain, a)] = (time.time(), px)
             elif d is not None and a not in seen_any:
                 QUOTE_USD[(chain, a)] = (time.time(), None)   # no pool anywhere — negative
             # pool exists but on another chain — leave it to single quote_usd
@@ -408,7 +451,11 @@ def quote_usd_batch(chain, toks):
 
 
 def quote_usd(chain, tok, sym, symbol_fallback=True):
-    """What 1 unit of the quote token costs in USD (6h cache).
+    """What 1 unit of the quote token costs in USD (10-min cache).
+
+    Pool selection = _pool_consensus (median ±15%, then liquidity): the
+    highest-liquidity pool alone can be poisoned (WBTC/CRO fake pool at
+    $522B/coin with $7.7B fake liq → a $66M phantom balance).
 
     symbol_fallback=False — for wallet POSITIONS: price strictly from the token''s
     own pool by address. Symbol search is dangerous on drops: a fake airdrop
@@ -416,6 +463,7 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
     and drew a $134K balance. Swap legs (quotes) still use the fallback."""
     if sym in STABLES:
         return 1.0, False
+    tok = tok.lower()
     key = (chain, tok)
     now = time.time()
     hit = QUOTE_USD.get(key)
@@ -427,7 +475,7 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
         try:
             d, err = _get(f"https://api.dexscreener.com/latest/dex/tokens/{tok}")
             if d:
-                best_liq = -1
+                cands = []
                 for p in d.get("pairs") or []:
                     if p.get("chainId") != chain:
                         continue
@@ -439,8 +487,10 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
                         pu = float(p["priceUsd"])
                     except Exception:
                         continue
-                    if liq > best_liq and pu > 0:
-                        best_liq, px = liq, pu
+                    if liq > 0 and pu > 0:
+                        cands.append((liq, pu,
+                                      ((p.get("quoteToken") or {}).get("symbol") or "")))
+                px = _pool_consensus(cands)
         except Exception:
             pass
         QUOTE_USD[key] = (now, px)   # None = "no own pool" (10-min negative)
@@ -459,7 +509,7 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
         d, err = _get("https://api.dexscreener.com/latest/dex/search?q="
                       + urllib.parse.quote(sym))
         if d:
-            best_liq = -1
+            cands = []
             for p in d.get("pairs") or []:
                 if p.get("chainId") != chain:
                     continue
@@ -471,8 +521,8 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
                         pu = float(p["priceUsd"])
                     except Exception:
                         continue
-                    if liq > best_liq and pu > 0:
-                        best_liq, px = liq, pu
+                    if liq > 0 and pu > 0:
+                        cands.append((liq, pu, (qt.get("symbol") or "")))
                 elif (qt.get("symbol") or "").upper() == sym:
                     # token as quote: price = base_usd / base_native
                     try:
@@ -480,8 +530,12 @@ def quote_usd(chain, tok, sym, symbol_fallback=True):
                         pu = float(p["priceUsd"])
                     except Exception:
                         continue
-                    if bn > 0 and liq > best_liq:
-                        best_liq, px = liq, pu / bn
+                    if bn > 0 and liq > 0:
+                        # derived price; counterparty trust unknown → empty quote
+                        # tag: this candidate never wins the "major quote" gate,
+                        # it can only pass median consensus
+                        cands.append((liq, pu / bn, ""))
+            px = _pool_consensus(cands)
     except Exception:
         pass
     QUOTE_USD[skey] = (now, px)
